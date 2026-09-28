@@ -1,0 +1,35 @@
+{
+  "id": "SMOKE-1",
+  "goal": "规范化标签，去空白、小写、保序去重，非字符串报错",
+  "write_scope": [
+    "slug.py"
+  ],
+  "acceptance": [
+    "中文与英文、空输入、非字符串测试通过"
+  ],
+  "difficulty": "L1",
+  "risk": "low",
+  "assessment_evidence": "目标与实现路径明确；纯函数，无外部状态；为验证委派链路执行一次有界冒烟",
+  "tools": [
+    "read",
+    "edit",
+    "shell"
+  ],
+  "verification": {
+    "required": [
+      "python_unittest"
+    ],
+    "available": [
+      "python_unittest"
+    ]
+  },
+  "role": "Executor",
+  "tiny": false,
+  "behavior_change": true,
+  "observed_permissions": {
+    "sandbox": "danger-full-access",
+    "filesystem_read_only": false,
+    "external_writes_disabled": false
+  },
+  "parent_model": "gpt-6-astra"
+}

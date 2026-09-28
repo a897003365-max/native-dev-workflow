@@ -1,0 +1,104 @@
+{
+  "max_fix_rounds": 3,
+  "catalog_source": "2026-09-26 native spawn tool schema + models_cache.json; refresh against current tool schema each session",
+  "catalog": {
+    "gpt-6-luna": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ],
+    "gpt-6-sol": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      "ultra"
+    ],
+    "gpt-6-astra": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      "ultra"
+    ],
+    "gpt-5.6-sol": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      "ultra"
+    ],
+    "gpt-5.6-terra": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      "ultra"
+    ],
+    "gpt-5.6-luna": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max"
+    ]
+  },
+  "aliases": {},
+  "upstream_identity": "unknown; aliases empty means no mapping observed, not proof of no gateway",
+  "families": {
+    "6": {
+      "economy": {
+        "model": "gpt-6-luna",
+        "reasoning_effort": "xhigh"
+      },
+      "standard": {
+        "model": "gpt-6-sol",
+        "reasoning_effort": "high"
+      },
+      "strong": {
+        "model": "gpt-6-astra",
+        "reasoning_effort": "high"
+      }
+    },
+    "5.6": {
+      "economy": {
+        "model": "gpt-5.6-luna",
+        "reasoning_effort": "xhigh"
+      },
+      "standard": {
+        "model": "gpt-5.6-terra",
+        "reasoning_effort": "medium"
+      },
+      "strong": {
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high"
+      }
+    }
+  },
+  "parent_models": {
+    "gpt-6-astra": "6",
+    "gpt-6-sol": "6",
+    "gpt-6-luna": "6",
+    "gpt-5.6-sol": "5.6",
+    "gpt-5.6-terra": "5.6",
+    "gpt-5.6-luna": "5.6"
+  },
+  "speed_preferences": {
+    "gpt-5.6-luna": {
+      "requested": "fast",
+      "application": "unavailable_per_child_in_current_spawn_tool",
+      "observed": null
+    },
+    "gpt-6-luna": {
+      "requested": "fast",
+      "application": "unavailable_per_child_in_current_spawn_tool",
+      "observed": null
+    }
+  }
+}
