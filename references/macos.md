@@ -2,6 +2,8 @@
 
 仅适用于 macOS 的 zsh/bash。Windows 使用 [Windows 版](windows.md)，两版共用路由和角色规则，不共用平台命令。需要 Git、Python 3.11+；先确认 `git --version`、`python3 --version` 可运行，不假定系统已经提供所需版本。
 
+若 `python3 --version` 低于 3.11，先检查已有的合适解释器。Apple silicon 上可检查 `/opt/homebrew/bin/python3.12`，确认版本后将下文 `python3`（包括 uv 的 `--python` 参数）替换为该绝对路径；不要假定该路径一定存在，也不必改动系统 Python 或全局 PATH。
+
 ## 首次安装
 
 主目录为 `${CODEX_HOME:-$HOME/.codex}/skills/native-dev-workflow`，共享发现入口为 `$HOME/.agents/skills/native-dev-workflow`。只保留一份技能，通过符号链接共享；已有目录、文件或失效链接都应先检查并备份。
@@ -54,4 +56,6 @@ uv run --no-project --with pyyaml --python python3 python -X utf8 -B "$codex_roo
 
 回滚时先确认共享入口确为指向主目录的符号链接，只移除链接本身；将主目录移到技能发现路径外备存，不递归删除链接指向的目录。共同验收和升级要求见 [操作说明](operations.md)。
 
-本版已作静态检查，尚未在真实 Mac 上执行安装、链接和运行验证；Windows 上的路由测试不能替代 macOS 实机验证。
+2026-09-30 在真实 macOS arm64 上验证：现有安装从 `9f72a3c` 快进更新到 `3822e56`；共享入口的符号链接目标与两入口 SKILL.md SHA-256 一致。使用已安装的 Python 3.12.13，19 项路由测试、示例路由与隔离 PyYAML 格式校验均通过。默认 `python3` 为 3.9.6，因此完整功能应使用已核验的 3.11+ 解释器。
+
+本次是现有安装更新验证，未执行首次克隆安装，也未重跑真实 Executor/Reviewer 冒烟；不据此证明模型、Fast 或沙箱实际生效。
