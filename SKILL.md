@@ -5,6 +5,8 @@ description: 本地开发、修复和代码审查时，按任务语义评估难�
 
 # 轻量原生开发工作流
 
+本机采用 Windows / PowerShell；首次使用先读 [Windows 本地适配](references/windows.md)。Python 命令统一使用 `python -X utf8 -B`，路径用 `Join-Path` 并引用变量。模型与权限仍以当前会话工具为准。
+
 此 Skill 明确请求主 Agent 在独立子任务确有收益或代码交付需独立审查时派发子代理；普通需求不需要用户再次指定角色。遵循当前任务授权与项目规则，不扩大权限。采用 Superpowers 的适用原则，差异与固定来源见 [来源与环境](references/environment.md)。
 
 ## 评估与路由
@@ -22,13 +24,18 @@ description: 本地开发、修复和代码审查时，按任务语义评估难�
 
 需要委派时复制 [任务记录输入](references/task.example.json)，写入本任务已有证据目录（无入口可用临时目录），填写语义评估证据及 `parent_model`（主任务实际运行模型，不是 config.toml 默认值）；运行：
 
-```sh
-python3 ~/.codex/skills/native-dev-workflow/scripts/workflow.py /absolute/path/task.json
+```powershell
+$codexRoot = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+$skillRoot = Join-Path $codexRoot 'skills/native-dev-workflow'
+# 将 taskPath 设为当前任务真实 JSON 的绝对路径。
+python -X utf8 -B (Join-Path $skillRoot 'scripts/workflow.py') $taskPath
 ```
 
 脚本只校验结构化判断、产生参数与记录，不分析自然语言、不创建 Agent、不强制沙箱。主 Agent 必须审查分级是否有事实依据。使用输出 `dispatch` 字段配合明确 `message` 真正调用当前原生工具。`dispatch=null` 时先解决对应原因，不能照样派发。诊断澄清后可以把实现重新分级为 L1；不要为了经济档让低能力模型反复盲试。
 
-Luna 默认请求 Fast 偏好记录在 routing.json 的 speed_preferences，推理为 xhigh；Sol 为 high。Fast 与推理档独立。当前 spawn 工具没有 service_tier 参数，不能按 Luna 单独开启 Fast，记录为未应用/未知；不要把 priority 工具元数据当作已启用用户 Fast，也不要为 Luna 偏好全局加速主模型和其他子代理。未来有逐子代理速度控制时才在派发中使用已验证的原生参数并核验结果。官方仅对 5.6 等明确标注 1.5x，不承诺 6 系列固定倍速；Fast 会增加额度消耗，当前规则没有改变全局额度设置。
+速度偏好记录在 routing.json 的 speed_preferences：默认 inherit_parent，跟随派发时主模型的实际速度模式；只有 gpt-6-luna 默认请求 fast，无论主模型是否为 Fast。主模型速度不可观测时保持跟随意图并将实际值记为未知，不从模型名称、推理档或 priority 工具元数据推断。速度与推理档独立，不因此改变 Luna/xhigh、Sol/high 等推理设置。
+
+当前 spawn 工具没有逐子代理速度参数，因此 inherit_parent 和 fast 都是待应用的偏好，不能声称已验证继承或已强制开启 Fast。不要添加工具不支持的 service_tier，也不要为 gpt-6-luna 修改主模型或全局速度。只有当前工具支持独立速度控制时，才把已确认的父速度或 gpt-6-luna 的 fast 偏好传入真实参数并核验结果；无法满足时明确记录未应用/未知。
 
 ## 职责、权限和上下文
 

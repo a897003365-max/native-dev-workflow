@@ -110,7 +110,7 @@ def route(task, config, role_config=None):
     return {
         'task': task, 'family': family, 'tier': tier, 'selection_reason': task['assessment_evidence'],
         'action': 'blocked_verification_or_config' if blocked else ('main_agent_direct' if direct and action == 'proceed' else action),
-        'requested': requested, 'speed_preference': config.get('speed_preferences', {}).get(requested['model']),
+        'requested': requested, 'speed_preference': config['speed_preferences'].get(requested['model'], config['speed_preferences']['default']),
         'missing_verification': missing, 'warnings': warnings,
         'dispatch': dict(task_name=task['id'].lower().replace('-', '_'), fork_turns='none',
                          model=requested['model'], reasoning_effort=requested['reasoning_effort']) if can_dispatch else None,

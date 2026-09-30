@@ -6,11 +6,22 @@
 
 在目标目录不存在时执行；已有安装请先检查改动并备份，不覆盖现有文件。
 
-```sh
-git clone https://github.com/a897003365-max/native-dev-workflow.git ~/.codex/skills/native-dev-workflow
-mkdir -p ~/.agents/skills
-ln -s ~/.codex/skills/native-dev-workflow ~/.agents/skills/native-dev-workflow
+本地 Windows 适配版以 `.codex/skills/native-dev-workflow` 为主版本，`.agents/skills/native-dev-workflow` 通过目录联接指向主版本。已安装目录不要再次执行安装。新机器首次安装上游版可用：
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$codexRoot = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+$skillRoot = Join-Path $codexRoot 'skills/native-dev-workflow'
+$sharedRoot = Join-Path $env:USERPROFILE '.agents/skills'
+$sharedSkill = Join-Path $sharedRoot 'native-dev-workflow'
+if ((Test-Path -LiteralPath $skillRoot) -or (Test-Path -LiteralPath $sharedSkill)) { throw '目标已存在；先检查和备份。' }
+git clone https://github.com/a897003365-max/native-dev-workflow.git $skillRoot
+if ($LASTEXITCODE -ne 0) { throw '克隆失败，停止安装。' }
+New-Item -ItemType Directory -Path $sharedRoot -Force | Out-Null
+New-Item -ItemType Junction -Path $sharedSkill -Target $skillRoot
 ```
+
+本机调整与升级保留规则见 [Windows 本地适配](references/windows.md)。
 
 显式调用：`$native-dev-workflow 帮我实现……`。
 
@@ -32,15 +43,17 @@ ln -s ~/.codex/skills/native-dev-workflow ~/.agents/skills/native-dev-workflow
 | 5.6 | Luna / xhigh | Terra / medium | Sol / high |
 | 6 | Luna / xhigh | Sol / high | Astra / high |
 
-映射位于 `routing.json`，不是 Codex 原生配置文件。Luna 的 Fast 仅为偏好；当前记录的原生工具不支持逐子代理速度参数，不能据此声称已开启加速。只读角色也不代表强制权限隔离。
+映射位于 `routing.json`，不是 Codex 原生配置文件。速度默认跟随主模型，只有 `gpt-6-luna` 默认请求 Fast；当前原生工具不支持逐子代理速度参数，记录为未应用/未知，不能据此声称已验证继承或已开启加速。只读角色也不代表强制权限隔离。
 
 ## 检查
 
 路由脚本使用 Python 标准库，不发模型请求，不创建 Agent。
 
-```sh
-python3 -B -m unittest discover -s tests -v
-python3 scripts/workflow.py references/task.example.json
+在 Skill 根目录执行：
+
+```powershell
+python -X utf8 -B -m unittest discover -s tests -v
+python -X utf8 -B scripts/workflow.py references/task.example.json
 ```
 
 `parent_model` 必须来自主任务实际运行配置；示例 JSON 仅用于演示。离线路由检查不能替代真实子代理调用或业务验收。

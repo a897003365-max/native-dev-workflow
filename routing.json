@@ -1,6 +1,6 @@
 {
   "max_fix_rounds": 3,
-  "catalog_source": "2026-09-26 native spawn tool schema + models_cache.json; refresh against current tool schema each session",
+  "catalog_source": "2026-09-28 checked against this desktop session collaboration.spawn_agent schema; refresh against current tool schema each session; see references/windows.md",
   "catalog": {
     "gpt-6-luna": [
       "low",
@@ -90,8 +90,8 @@
     "gpt-5.6-luna": "5.6"
   },
   "speed_preferences": {
-    "gpt-5.6-luna": {
-      "requested": "fast",
+    "default": {
+      "requested": "inherit_parent",
       "application": "unavailable_per_child_in_current_spawn_tool",
       "observed": null
     },

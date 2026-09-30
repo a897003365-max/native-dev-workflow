@@ -115,20 +115,21 @@ class WorkflowTest(unittest.TestCase):
         self.assertEqual(r['dispatch']['model'], 'gpt-5.6-sol')
         self.assertEqual(r['tier'], 'strong')
 
-    def test_luna_xhigh_sol_high_and_fast_not_faked(self):
+    def test_speed_follows_parent_except_6_luna_without_faking_application(self):
         for family in ['6', '5.6']:
             for tier, setting in self.config['families'][family].items():
                 self.task.update(parent_model='gpt-' + family + '-sol',
                                  difficulty={'economy':'L1','standard':'L2','strong':'L3'}[tier])
                 r = route(self.task, self.config)
+                expected_speed = 'fast' if setting['model'] == 'gpt-6-luna' else 'inherit_parent'
+                self.assertEqual(r['speed_preference']['requested'], expected_speed)
+                self.assertEqual(r['speed_preference']['application'], 'unavailable_per_child_in_current_spawn_tool')
+                self.assertIsNone(r['speed_preference']['observed'])
+                self.assertNotIn('service_tier', r['dispatch'])
                 if setting['model'].endswith('-luna'):
                     self.assertEqual(r['dispatch']['reasoning_effort'], 'xhigh')
-                    self.assertEqual(r['speed_preference']['requested'], 'fast')
-                    self.assertIsNone(r['speed_preference']['observed'])
-                    self.assertNotIn('service_tier', r['dispatch'])
                 elif setting['model'].endswith('-sol'):
                     self.assertEqual(r['dispatch']['reasoning_effort'], 'high')
-                    self.assertIsNone(r['speed_preference'])
 
     def test_runtime_not_fabricated(self):
         r = route(self.task, self.config)
