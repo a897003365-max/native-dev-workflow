@@ -5,7 +5,7 @@ description: 本地开发、修复和代码审查时，按任务语义评估难�
 
 # 轻量原生开发工作流
 
-本机采用 Windows / PowerShell；首次使用先读 [Windows 本地适配](references/windows.md)。Python 命令统一使用 `python -X utf8 -B`，路径用 `Join-Path` 并引用变量。模型与权限仍以当前会话工具为准。
+先按实际执行主机选择平台入口：Windows 读取 [Windows 版](references/windows.md)，macOS 读取 [macOS 版](references/macos.md)，只加载对应平台的命令与路径约束。Windows 使用 PowerShell 和目录联接；macOS 使用 zsh/bash 和符号链接。其他平台先确认 shell 与路径，不直接套用这两版安装命令。两版共用本 Skill 的角色、路由和速度规则；模型、权限及工具能力始终以当前会话为准。
 
 此 Skill 明确请求主 Agent 在独立子任务确有收益或代码交付需独立审查时派发子代理；普通需求不需要用户再次指定角色。遵循当前任务授权与项目规则，不扩大权限。采用 Superpowers 的适用原则，差异与固定来源见 [来源与环境](references/environment.md)。
 
@@ -22,14 +22,7 @@ description: 本地开发、修复和代码审查时，按任务语义评估难�
 
 主任务中途切换模型后重新读取实际模型；每次派发按同系列选择，失败升级也不得跨系列。嵌套子任务沿用主任务系列约束。未知名称或 `gpt-5.6` 等未经证实别名先核实，不自动猜为 Sol，也不回退到 6。
 
-需要委派时复制 [任务记录输入](references/task.example.json)，写入本任务已有证据目录（无入口可用临时目录），填写语义评估证据及 `parent_model`（主任务实际运行模型，不是 config.toml 默认值）；运行：
-
-```powershell
-$codexRoot = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
-$skillRoot = Join-Path $codexRoot 'skills/native-dev-workflow'
-# 将 taskPath 设为当前任务真实 JSON 的绝对路径。
-python -X utf8 -B (Join-Path $skillRoot 'scripts/workflow.py') $taskPath
-```
+需要委派时复制 [任务记录输入](references/task.example.json)，写入本任务已有证据目录（无入口可用临时目录），填写语义评估证据及 `parent_model`（主任务实际运行模型，不是 config.toml 默认值）；使用对应平台文档中“运行路由与验证”的命令执行。任务文件必须传真实绝对路径，不直接运行未替换的示例路径。
 
 脚本只校验结构化判断、产生参数与记录，不分析自然语言、不创建 Agent、不强制沙箱。主 Agent 必须审查分级是否有事实依据。使用输出 `dispatch` 字段配合明确 `message` 真正调用当前原生工具。`dispatch=null` 时先解决对应原因，不能照样派发。诊断澄清后可以把实现重新分级为 L1；不要为了经济档让低能力模型反复盲试。
 
