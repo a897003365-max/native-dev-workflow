@@ -46,9 +46,74 @@ class WorkflowTest(unittest.TestCase):
         self.task.update(role='Reviewer', write_scope=[])
         r = route(self.task, self.config)
         self.assertEqual(r['tier'], 'strong')
+        self.assertIsNotNone(r['dispatch'])
+        self.assertEqual(r['review_mode'], 'code')
+        self.assertEqual(r['review_isolation'], 'behavioral_read_only')
+        self.assertEqual(r['review_result'], 'not_run')
+        self.assertEqual(r['review_requirement'], 'independent_strong_before_commit')
+        self.assertIn('review_permission_isolation_not_enforced', r['warnings'])
+
+    def test_strict_review_requires_both_verified_boundaries_at_any_risk(self):
+        self.task.update(role='Reviewer', write_scope=[], review_mode='strict')
+        for risk in ['low', 'high']:
+            self.task['risk'] = risk
+            for permission in [{}, {'filesystem_read_only': True},
+                               {'external_writes_disabled': True},
+                               {'filesystem_read_only': True, 'external_writes_disabled': False}]:
+                self.task['observed_permissions'] = permission
+                r = route(self.task, self.config)
+                self.assertIsNone(r['dispatch'])
+                self.assertEqual(r['final_acceptance'], '阻塞')
+                self.assertIn('strict_review_permission_boundary_unverified', r['warnings'])
+        self.task['observed_permissions'] = {'filesystem_read_only': True, 'external_writes_disabled': True}
+        r = route(self.task, self.config)
+        self.assertIsNotNone(r['dispatch'])
+        self.assertEqual(r['review_isolation'], 'enforced_read_only')
+
+    def test_code_review_unknown_isolation_is_not_fabricated(self):
+        self.task.update(role='Reviewer', write_scope=[], risk='high', observed_permissions={})
+        r = route(self.task, self.config)
+        self.assertIsNotNone(r['dispatch'])
+        self.assertEqual(r['review_isolation'], 'unknown')
+        self.assertEqual(r['review_result'], 'not_run')
+
+    def test_isolated_test_blocks_only_dependent_review_task(self):
+        self.task.update(role='Reviewer', write_scope=[], risk='high', review_mode='isolated_test')
+        r = route(self.task, self.config)
         self.assertIsNone(r['dispatch'])
-        self.task['observed_permissions'] = {'filesystem_read_only':True, 'external_writes_disabled':True}
+        self.assertIn('isolated_test_environment', r['missing_verification'])
+        self.task['review_mode'] = 'code'
         self.assertIsNotNone(route(self.task, self.config)['dispatch'])
+        self.task['review_mode'] = 'isolated_test'
+        self.task['verification']['available'].append('isolated_test_environment')
+        r = route(self.task, self.config)
+        self.assertIsNotNone(r['dispatch'])
+        self.assertEqual(r['review_isolation'], 'behavioral_test_scope')
+        self.task['verification']['required'].append('real_device')
+        self.assertIsNone(route(self.task, self.config)['dispatch'])
+
+    def test_invalid_review_mode_rejected(self):
+        self.task.update(role='Reviewer', write_scope=[], review_mode='production')
+        with self.assertRaises(ValueError): route(self.task, self.config)
+
+    def test_code_review_preserves_parent_pending_without_blocking(self):
+        self.task.update(role='Reviewer', write_scope=[], risk='high',
+                         pending_verification=['real_device', 'isolated_test_environment'])
+        r = route(self.task, self.config)
+        self.assertIsNotNone(r['dispatch'])
+        self.assertEqual(r['pending_verification'], ['real_device', 'isolated_test_environment'])
+        self.assertEqual(r['missing_verification'], [])
+        self.assertNotEqual(r['final_acceptance'], '通过')
+        self.task['verification']['required'].append('necessary_test_evidence')
+        r = route(self.task, self.config)
+        self.assertIsNone(r['dispatch'])
+        self.assertIn('necessary_test_evidence', r['missing_verification'])
+        self.assertEqual(r['pending_verification'], ['real_device', 'isolated_test_environment'])
+
+    def test_invalid_pending_verification_rejected(self):
+        for pending in ['real_device', None, [True]]:
+            self.task['pending_verification'] = pending
+            with self.assertRaises(ValueError): route(self.task, self.config)
 
     def test_missing_device_not_model_upgrade(self):
         self.task['verification']['required'].append('real_device')

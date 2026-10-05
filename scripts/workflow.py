@@ -86,6 +86,14 @@ def route(task, config, role_config=None):
         if not isinstance(v.get(key), list):
             raise ValueError('verification required/available must be lists')
     missing = sorted(set(v['required']) - set(v['available']))
+    pending = task.get('pending_verification', [])
+    if not isinstance(pending, list) or any(not isinstance(item, str) for item in pending):
+        raise ValueError('pending_verification must be a list of verification names')
+    review_mode = task.get('review_mode', 'code')
+    if review_mode not in {'code', 'isolated_test', 'strict'}:
+        raise ValueError('invalid review_mode')
+    if task['role'] == 'Reviewer' and review_mode == 'isolated_test':
+        missing = sorted(set(missing) | ({'isolated_test_environment'} - set(v['available'])))
     action = failure_action(task.get('failures', []), config['max_fix_rounds'])
     tier = {'L1': 'economy', 'L2': 'standard', 'L3': 'strong'}[task['difficulty']]
     if task['role'] == 'Reviewer' and task['risk'] == 'high':
@@ -101,17 +109,31 @@ def route(task, config, role_config=None):
     direct = (task['role'] == 'Executor' and task['tiny']
               and task['difficulty'] == 'L1' and task['risk'] == 'low')
     permission = task.get('observed_permissions', {})
-    strict_review_missing = task['role'] == 'Reviewer' and task['risk'] == 'high' and not (
-        permission.get('filesystem_read_only') is True and permission.get('external_writes_disabled') is True)
-    if strict_review_missing:
-        blocked = True
-        warnings.append('high_risk_review_permission_boundary_unverified')
+    review_isolation = None
+    if task['role'] == 'Reviewer':
+        if permission.get('filesystem_read_only') is True and permission.get('external_writes_disabled') is True:
+            review_isolation = 'enforced_read_only'
+        elif permission.get('sandbox') == 'danger-full-access' or any(
+                permission.get(key) is False for key in ['filesystem_read_only', 'external_writes_disabled']):
+            review_isolation = 'behavioral_read_only'
+        else:
+            review_isolation = 'unknown'
+        if review_mode == 'isolated_test' and review_isolation == 'behavioral_read_only':
+            review_isolation = 'behavioral_test_scope'
+        if review_isolation != 'enforced_read_only':
+            warnings.append('review_permission_isolation_not_enforced')
+            if review_mode == 'strict':
+                blocked = True
+                warnings.append('strict_review_permission_boundary_unverified')
     can_dispatch = not direct and not blocked and action in {'proceed', 'escalate_with_evidence'}
     return {
         'task': task, 'family': family, 'tier': tier, 'selection_reason': task['assessment_evidence'],
         'action': 'blocked_verification_or_config' if blocked else ('main_agent_direct' if direct and action == 'proceed' else action),
         'requested': requested, 'speed_preference': config['speed_preferences'].get(requested['model'], config['speed_preferences']['default']),
         'missing_verification': missing, 'warnings': warnings,
+        'pending_verification': pending,
+        'review_mode': review_mode if task['role'] == 'Reviewer' else None,
+        'review_isolation': review_isolation,
         'dispatch': dict(task_name=task['id'].lower().replace('-', '_'), fork_turns='none',
                          model=requested['model'], reasoning_effort=requested['reasoning_effort']) if can_dispatch else None,
         'review_requirement': 'independent_strong_before_commit' if task['risk'] == 'high' else (
