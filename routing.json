@@ -1,6 +1,6 @@
 {
   "max_fix_rounds": 3,
-  "catalog_source": "2026-09-28 checked against this desktop session collaboration.spawn_agent schema; refresh against current tool schema each session; see references/windows.md",
+  "catalog_source": "2026-10-06 gpt-6.1-sol and its efforts verified against current collaboration.spawn_agent enum; other entries retain 2026-09-28 baseline; refresh against current tool schema each session",
   "catalog": {
     "gpt-6-luna": [
       "low",
@@ -10,6 +10,14 @@
       "max"
     ],
     "gpt-6-sol": [
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      "ultra"
+    ],
+    "gpt-6.1-sol": [
       "low",
       "medium",
       "high",
@@ -58,7 +66,7 @@
         "reasoning_effort": "xhigh"
       },
       "standard": {
-        "model": "gpt-6-sol",
+        "model": "gpt-6.1-sol",
         "reasoning_effort": "high"
       },
       "strong": {
@@ -84,6 +92,7 @@
   "parent_models": {
     "gpt-6-astra": "6",
     "gpt-6-sol": "6",
+    "gpt-6.1-sol": "6",
     "gpt-6-luna": "6",
     "gpt-5.6-sol": "5.6",
     "gpt-5.6-terra": "5.6",

@@ -164,6 +164,19 @@ class WorkflowTest(unittest.TestCase):
                 self.assertEqual(r['family'], family)
                 self.assertEqual(self.config['parent_models'][r['dispatch']['model']], family)
 
+    def test_sol_routes_migrate_to_61_without_changing_other_tiers(self):
+        for parent in ['gpt-6-sol', 'gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-luna']:
+            self.task.update(parent_model=parent, difficulty='L2')
+            r = route(self.task, self.config)
+            self.assertEqual(r['dispatch']['model'], 'gpt-6.1-sol')
+            self.assertEqual(r['dispatch']['reasoning_effort'], 'high')
+            self.assertEqual(r['speed_preference']['requested'], 'inherit_parent')
+        self.task.update(parent_model='gpt-6.1-sol', difficulty='L1',
+                         failures=[{'cause':'capability','root_cause':'integration_judgment'}])
+        self.assertEqual(route(self.task, self.config)['dispatch']['model'], 'gpt-6.1-sol')
+        for settings in self.config['families'].values():
+            self.assertNotIn('gpt-6-sol', [value['model'] for value in settings.values()])
+
     def test_missing_or_unknown_parent_rejected(self):
         for parent in [None, 'gpt-5.6', 'future-model']:
             self.task['parent_model'] = parent
