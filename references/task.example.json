@@ -10,6 +10,8 @@
   "difficulty": "L1",
   "risk": "low",
   "assessment_evidence": "目标与实现路径明确；纯函数，无外部状态；为验证委派链路执行一次有界冒烟",
+  "risk_evidence": "纯函数，不写外部状态；局部文件修改可回退",
+  "reasoning_need": "routine",
   "tools": [
     "read",
     "edit",
@@ -31,5 +33,5 @@
     "filesystem_read_only": false,
     "external_writes_disabled": false
   },
-  "parent_model": "gpt-6-astra"
+  "parent_model": "gpt-6.1-sol"
 }

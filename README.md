@@ -22,6 +22,7 @@
 - 极小任务直接处理；有独立交付价值时才委派。
 - L1/L2/L3 难度、失败风险和验证环境分别判断。
 - 主模型与子代理保持同系列；职责与模型能力档分开。
+- 派发前实际运行路由和参数校验，交付前审计本任务真实调用；安装 Skill 不拦截原生工具。步骤见 [派发与审计协议](references/dispatch-protocol.md)。同类子任务允许使用同一模型。
 - 每次派发 message 展开共同行为、一个角色指令和任务契约；task_name 不代表角色已生效。
 - 独立 Reviewer 检查实际产物，主 Agent 负责最终整合与验收。
 - 同根因连续两次失败停止原方案，默认最多三轮自动修复。
@@ -30,8 +31,10 @@
 
 | 主模型系列 | 经济档 | 标准档 | 强能力档 |
 | --- | --- | --- | --- |
-| 5.6 | Luna / xhigh | Terra / medium | Sol / high |
-| 6 | Luna / xhigh | Sol / high | Astra / high |
+| 5.6 | Luna / xhigh | Terra / high | Sol / high |
+| 6 | Luna / xhigh | 6.1 Sol / high | Astra / high |
+
+已选 6.1 Sol 且需要深入比较候选解释时，填写 `deep_comparison` 与证据，使用 `max`。当前客户端 schema 支持情况与底层模型身份分开核验。
 
 映射位于 `routing.json`，不是 Codex 原生配置文件。速度默认跟随主模型，只有 `gpt-6-luna` 默认请求 Fast；当前原生工具不支持逐子代理速度参数，记录为未应用/未知，不能据此声称已验证继承或已开启加速。只读角色也不代表强制权限隔离。
 

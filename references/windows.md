@@ -59,6 +59,19 @@ python -X utf8 -B (Join-Path $skillRoot 'scripts/workflow.py') (Join-Path $skill
 
 第二条命令只验证示例路由。实际委派时，将最后一个参数替换为本任务已填写的 JSON 绝对路径。
 
+实际派发按 [派发与审计协议](dispatch-protocol.md) 保存输入、工具能力与消息后运行以下命令。先定义本任务已有的 `$evidenceRoot` 和明确定位的 `$parentRollout`；路径必须是真实绝对路径。每一步检查 `$LASTEXITCODE`，非 0 停止依赖步骤。
+
+```powershell
+$workflow = Join-Path $skillRoot 'scripts/workflow.py'
+$taskPath = Join-Path $evidenceRoot 'task.json'
+python -X utf8 -B $workflow $taskPath --output (Join-Path $evidenceRoot 'route.json')
+python -X utf8 -B $workflow $taskPath --dispatch-file (Join-Path $evidenceRoot 'dispatch.json') --capabilities (Join-Path $evidenceRoot 'capabilities.json') --output (Join-Path $evidenceRoot 'preflight.json')
+# 确认前两步成功后，由主 Agent 真实调用 spawn_agent，再审计。
+python -X utf8 -B $workflow --audit-rollout $parentRollout --records (Join-Path $evidenceRoot 'preflight.json') --output (Join-Path $evidenceRoot 'audit.json')
+```
+
+多次派发向 `--records` 传所有凭证；已定位子日志时增加 `--child-rollout`。省略子日志只会记为运行配置未知，不能当作模型核验通过。
+
 若已安装 `uv` 且本机具有系统 `skill-creator`，使用隔离依赖进行格式校验：
 
 ```powershell

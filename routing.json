@@ -1,7 +1,10 @@
 {
   "max_fix_rounds": 3,
-  "catalog_source": "2026-09-28 checked against this desktop session collaboration.spawn_agent schema; refresh against current tool schema each session; see references/windows.md",
+  "catalog_source": "2026-10-09 collaboration.spawn_agent schema; client-supported names/efforts, not upstream identity or account access; refresh each session",
   "catalog": {
+    "gpt-6.1-sol": [
+      "low", "medium", "high", "xhigh", "max", "ultra"
+    ],
     "gpt-6-luna": [
       "low",
       "medium",
@@ -58,7 +61,7 @@
         "reasoning_effort": "xhigh"
       },
       "standard": {
-        "model": "gpt-6-sol",
+        "model": "gpt-6.1-sol",
         "reasoning_effort": "high"
       },
       "strong": {
@@ -73,7 +76,7 @@
       },
       "standard": {
         "model": "gpt-5.6-terra",
-        "reasoning_effort": "medium"
+        "reasoning_effort": "high"
       },
       "strong": {
         "model": "gpt-5.6-sol",
@@ -82,12 +85,16 @@
     }
   },
   "parent_models": {
+    "gpt-6.1-sol": "6",
     "gpt-6-astra": "6",
     "gpt-6-sol": "6",
     "gpt-6-luna": "6",
     "gpt-5.6-sol": "5.6",
     "gpt-5.6-terra": "5.6",
     "gpt-5.6-luna": "5.6"
+  },
+  "reasoning_rules": {
+    "gpt-6.1-sol": {"routine": "high", "deep_comparison": "max"}
   },
   "speed_preferences": {
     "default": {

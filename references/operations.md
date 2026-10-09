@@ -5,6 +5,7 @@
 本 Skill 自动发现开启（默认），不需要服务、数据库、依赖安装或角色变体。路由脚本是标准库 Python 3；`--role-config` 需要 Python 3.11+ 的 tomllib，建议使用 Python 3.11 或更新版本。
 
 离线检查与路径定义分别见 [Windows 版](windows.md) 和 [macOS 版](macos.md) 的“运行路由与验证”，只执行实际主机对应的命令。
+真实派发必须完成 [派发与审计协议](dispatch-protocol.md) 的路由、派发前检查和日志审计。保存实际 CLI 调用与退出码；脚本是本地检查，不是原生工具拦截器。
 这证明结构化路由规则，不证明主 Agent 语义判断必然正确或真实子代理模型已生效。真实冒烟须单独完成原生派发→Executor→新上下文 Reviewer→主 Agent 检查实际文件与测试，绑定快照。不要为覆盖全部模型组合批量调用。
 
 Skill 校验器需要 PyYAML，而路由运行不需要。平台文档中的 `uv run --no-project --with pyyaml` 为校验器提供隔离依赖，不修改全局 Python。保留各平台 Python 入口中的 `-X utf8`；不要修改系统区域或全局编码配置。
