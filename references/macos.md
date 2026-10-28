@@ -48,6 +48,17 @@ python3 -X utf8 -B "$skill_root/scripts/workflow.py" "$skill_root/references/tas
 
 第二条命令只验证示例路由。实际委派时，将最后一个参数替换为本任务已填写的 JSON 绝对路径。每条验证分别检查退出码，前一步失败时停止依赖步骤。
 
+真实派发还须执行 [派发与审计协议](dispatch-protocol.md)。定义本任务的绝对路径变量 `evidence_root` 和 `parent_rollout` 后使用：
+
+```sh
+python3 -X utf8 -B "$skill_root/scripts/workflow.py" "$evidence_root/task.json" --output "$evidence_root/route.json"
+python3 -X utf8 -B "$skill_root/scripts/workflow.py" "$evidence_root/task.json" --dispatch-file "$evidence_root/dispatch.json" --capabilities "$evidence_root/capabilities.json" --output "$evidence_root/preflight.json"
+# 确认前两步成功后，由主 Agent 真实调用 spawn_agent，再审计。
+python3 -X utf8 -B "$skill_root/scripts/workflow.py" --audit-rollout "$parent_rollout" --records "$evidence_root/preflight.json" --output "$evidence_root/audit.json"
+```
+
+每一步检查退出码；多次派发提供全部凭证。可重复增加 `--child-rollout` 指定已返回 Agent ID 的日志，不提供时运行配置保持未知。
+
 若已安装 `uv` 且本机具有系统 `skill-creator`，使用隔离依赖进行格式校验：
 
 ```sh

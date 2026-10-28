@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Semantic assessments in; validated native dispatch proposals out. No model calls."""
 import argparse
+from datetime import datetime, timezone
+import hashlib
 import json
+import os
 from pathlib import Path
 
 ROLES = {'Explorer', 'Executor', 'Reviewer', 'Advisor'}
@@ -76,6 +79,9 @@ def route(task, config, role_config=None):
         raise ValueError('invalid difficulty or risk')
     if task['role'] not in ROLES or not task['assessment_evidence'] or not task['acceptance']:
         raise ValueError('role, semantic assessment evidence and acceptance required')
+    for key in ['assessment_evidence'] + (['risk_evidence'] if 'risk_evidence' in task else []):
+        if not isinstance(task[key], str) or not task[key].strip():
+            raise ValueError(key + ' must contain factual assessment evidence')
     for key in ['tiny', 'behavior_change']:
         if type(task[key]) is not bool:
             raise ValueError(key + ' must be boolean')
@@ -180,21 +186,219 @@ def route(task, config, role_config=None):
     }
 
 
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def read_json(path):
+    return json.loads(path.read_text(encoding='utf-8'))
+
+
+def rollout_rows(path):
+    with path.open(encoding='utf-8') as stream:
+        for number, line in enumerate(stream, 1):
+            yield number, json.loads(line)
+
+
+def preflight(result, call, capabilities):
+    """Check a proposed call. This does not intercept the native spawn tool."""
+    expected = result['dispatch']
+    if expected is None:
+        raise ValueError('route is not dispatchable')
+    if set(call) != set(expected) | {'message'}:
+        raise ValueError('dispatch requires exact routed fields plus message; no omitted or extra parameters')
+    if any(call[key] != value for key, value in expected.items()):
+        raise ValueError('dispatch differs from route')
+    if not isinstance(call['message'], str) or not call['message'].strip():
+        raise ValueError('dispatch message required')
+    if not capabilities.get('source') or not set(call) <= set(capabilities['parameters']):
+        raise ValueError('current spawn schema source/parameters required')
+    if call['reasoning_effort'] not in capabilities['catalog'].get(call['model'], []):
+        raise ValueError('current spawn schema does not support requested model/effort')
+    return {'checked_at': datetime.now(timezone.utc).isoformat(),
+            'parameters': expected, 'message_sha256': digest(call['message'].encode()),
+            'capabilities_source': capabilities['source'],
+            'enforcement': 'local_check_only_not_tool_interception'}
+
+
+def runtime_from_rollout(path):
+    """Only read caller-selected metadata; never infer upstream identity."""
+    identity, metadata, observed = None, {}, []
+    for number, row in rollout_rows(path):
+        data = row.get('payload', {})
+        if row.get('type') == 'session_meta':
+            source = data.get('source')
+            spawn = source.get('subagent', {}).get('thread_spawn', {}) if isinstance(source, dict) else {}
+            metadata = {key: data.get(key) for key in ['id', 'agent_path', 'parent_thread_id']}
+            for key in ['agent_path', 'parent_thread_id']:
+                if not metadata[key]:
+                    metadata[key] = spawn.get(key)
+            metadata['source'] = {'path': str(path.resolve()), 'line': number}
+            identity = metadata['agent_path'] or metadata['id']
+        if row.get('type') == 'turn_context':
+            observed.append({'model': data.get('model'),
+                        'reasoning_effort': data.get('effort', data.get('reasoning_effort')),
+                        'source': {'path': str(path.resolve()), 'line': number}})
+    return identity, {'metadata': metadata, 'observed': observed}
+
+
+def audit_dispatches(rollout, records, child_rollouts=()):
+    """Audit actual spawn calls, including calls without a route receipt."""
+    calls, responses, parent_id = [], {}, None
+    for number, row in rollout_rows(rollout):
+        data = row.get('payload', {})
+        if row.get('type') == 'session_meta':
+            parent_id = data.get('id')
+        if row.get('type') != 'response_item':
+            continue
+        if data.get('type') == 'function_call' and data.get('name', '').split('.')[-1] == 'spawn_agent':
+            calls.append((number, row.get('timestamp'), data))
+        elif data.get('type') == 'function_call_output' and any(
+                call[2].get('call_id') == data.get('call_id') for call in calls):
+            responses[data.get('call_id')] = data.get('output')
+    runtime = {}
+    for path in child_rollouts:
+        identity, entry = runtime_from_rollout(path)
+        if not identity or identity in runtime:
+            raise ValueError('missing or duplicate child runtime identity')
+        runtime[identity] = entry
+    receipts = {}
+    for record in records:
+        name = (record.get('dispatch') or {}).get('task_name')
+        if name in receipts:
+            raise ValueError('duplicate route task_name')
+        receipts[name] = record
+    findings, results, used = [], [], set()
+    for number, timestamp, data in calls:
+        call = json.loads(data['arguments'])
+        violations = []
+        message_status = 'unknown'
+        record = receipts.get(call.get('task_name'))
+        if not record or not record.get('preflight'):
+            violations.append('missing_route_preflight')
+        else:
+            if call['task_name'] in used:
+                violations.append('reused_preflight')
+            used.add(call['task_name'])
+            receipt = record['preflight']
+            if receipt['parameters'] != record.get('dispatch'):
+                violations.append('preflight_route_record_mismatch')
+            evidence = record.get('route_evidence', {})
+            if not {'task', 'config', 'capabilities'} <= evidence.keys():
+                violations.append('missing_route_artifact_binding')
+            for binding in evidence.values():
+                path = Path(binding['path'])
+                if not path.is_file() or digest(path.read_bytes()) != binding['sha256']:
+                    violations.append('route_artifact_changed_or_missing')
+            if any(call.get(k) != v for k, v in receipt['parameters'].items()):
+                violations.append('dispatch_route_mismatch')
+            # Desktop rollouts may store a gAAAA... opaque envelope, not plaintext.
+            # Do not decrypt it or claim its contents match the planned message.
+            if call.get('message', '').startswith('gAAAA'):
+                message_status = 'unverifiable_opaque_log'
+            elif digest(call.get('message', '').encode()) != receipt['message_sha256']:
+                message_status = 'mismatch'
+                violations.append('dispatch_message_changed_after_preflight')
+            else:
+                message_status = 'match'
+            if not timestamp or datetime.fromisoformat(receipt['checked_at']) >= datetime.fromisoformat(timestamp.replace('Z', '+00:00')):
+                violations.append('preflight_not_before_dispatch')
+        for key in ['model', 'reasoning_effort', 'fork_turns']:
+            if key not in call:
+                violations.append('missing_' + key)
+        if call.get('fork_turns') != 'none':
+            violations.append('fork_turns_must_be_none')
+        response = responses.get(data.get('call_id'))
+        if isinstance(response, str):
+            try:
+                response = json.loads(response)
+            except json.JSONDecodeError:
+                response = None
+        reference = (response.get('agent_id') or response.get('task_name')) if isinstance(response, dict) else None
+        if not reference:
+            violations.append('agent_reference_unconfirmed')
+        entry = runtime.get(reference, {})
+        metadata = entry.get('metadata', {})
+        agent_id = metadata.get('id') or (response.get('agent_id') if isinstance(response, dict) else None)
+        observed = entry.get('observed', [])
+        if metadata.get('agent_path') and (not parent_id or metadata.get('parent_thread_id') != parent_id):
+            violations.append('child_parent_binding_unconfirmed')
+            observed = []
+        status = 'unknown'
+        if observed:
+            status = 'match' if all(all(context.get(k) is not None for k in ['model', 'reasoning_effort'])
+                                    for context in observed) else 'unknown'
+            if any(context[k] != call.get(k) for context in observed
+                   for k in ['model', 'reasoning_effort'] if context.get(k) is not None):
+                status = 'mismatch'
+                violations.append('runtime_request_mismatch')
+        results.append({'call_id': data.get('call_id'), 'agent_id': agent_id, 'agent_reference': reference,
+                        'task_name': call.get('task_name'),
+                        'request': {k: call.get(k) for k in ['model', 'reasoning_effort', 'fork_turns']},
+                        'source': {'path': str(rollout.resolve()), 'line': number},
+                        'agent_binding': metadata, 'runtime_records': observed,
+                        'runtime_status': status, 'message_status': message_status,
+                        'upstream_identity': None, 'violations': violations})
+        findings.extend({'task_name': call.get('task_name'), 'code': v} for v in violations)
+    for name in receipts.keys() - used:
+        findings.append({'task_name': name, 'code': 'route_without_dispatch'})
+    if not calls:
+        findings.append({'task_name': None, 'code': 'no_dispatch_evidence'})
+    return {'protocol_status': 'failed' if findings else 'passed',
+            'scope': str(rollout.resolve()), 'dispatches': results, 'violations': findings,
+            'unverified': [{'task_name': r['task_name'], 'field': field}
+                           for r in results
+                           for field in ['runtime_status', 'message_status']
+                           if r[field] in {'unknown', 'unverifiable_opaque_log'}],
+            'upstream_identity': 'unknown', 'enforcement': 'audit_only_not_tool_interception'}
+
+
+def write_json(path, result):
+    temporary = path.with_name(path.name + '.tmp')
+    temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    os.replace(temporary, path)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('task', type=Path)
+    parser.add_argument('task', type=Path, nargs='?')
     parser.add_argument('--config', type=Path, default=Path(__file__).parents[1] / 'routing.json')
     parser.add_argument('--role-config', type=Path)
+    parser.add_argument('--dispatch-file', type=Path)
+    parser.add_argument('--capabilities', type=Path)
+    parser.add_argument('--output', type=Path)
+    parser.add_argument('--audit-rollout', type=Path)
+    parser.add_argument('--records', type=Path, nargs='+')
+    parser.add_argument('--child-rollout', type=Path, action='append', default=[])
     args = parser.parse_args()
     role = None
     if args.role_config:
         import tomllib
-        role = tomllib.loads(args.role_config.read_text())
+        role = tomllib.loads(args.role_config.read_text(encoding='utf-8'))
     try:
-        result = route(json.loads(args.task.read_text()), json.loads(args.config.read_text()), role)
-    except (ValueError, KeyError, TypeError) as exc:
+        if args.audit_rollout:
+            if args.task or args.dispatch_file or not args.records:
+                raise ValueError('audit requires --records and no routing task/dispatch')
+            result = audit_dispatches(args.audit_rollout, [read_json(p) for p in args.records], args.child_rollout)
+        else:
+            if not args.task or not args.task.is_absolute():
+                raise ValueError('routing task must be a real absolute path')
+            result = route(read_json(args.task), read_json(args.config), role)
+            result['route_evidence'] = {k: {'path': str(p.resolve()), 'sha256': digest(p.read_bytes())}
+                                        for k, p in [('task', args.task), ('config', args.config)]}
+            if args.dispatch_file:
+                if not args.capabilities or not args.output:
+                    raise ValueError('preflight requires --capabilities and --output')
+                result['preflight'] = preflight(result, read_json(args.dispatch_file), read_json(args.capabilities))
+                result['route_evidence']['capabilities'] = {
+                    'path': str(args.capabilities.resolve()), 'sha256': digest(args.capabilities.read_bytes())}
+        if args.output:
+            write_json(args.output, result)
+    except (ValueError, KeyError, TypeError, OSError) as exc:
         parser.error(str(exc))
     print(json.dumps(result, ensure_ascii=False, indent=2))
+    if result.get('protocol_status') == 'failed':
+        raise SystemExit(1)
 
 
 if __name__ == '__main__':

@@ -12,6 +12,12 @@
 
 三档通用路由、Terra 专长、代码行为审查下限与 Sol/max 的具体规则只维护在 SKILL.md 和 routing.json。Luna/xhigh 暂保留，缺少本机同条件证据时不宣称统一降档质量不变。官方定位不是本机性能排名；单次隔离界面对照只能证明该样例的识别和操作表现，耗时与可观测用量需另记，不能外推整体优势。
 
+## 路由模型核验
+
+2026-10-09 当前 `collaboration.spawn_agent` 工具 schema 包含 `gpt-6.1-sol`，支持 low/medium/high/xhigh/max/ultra；本地 catalog 记录这个客户端枚举，不据此证明底层模型身份或账户调用成功。[6.1 Sol 官方 API 页面](https://developers.openai.com/api/docs/models/gpt-6.1-sol) 列出 low/medium/high/xhigh/max，未列 ultra；API 文档与客户端枚举应分别记录，实际派发先检查当前工具，不能将其中一份目录当成所有入口通用。
+
+[子代理文档](https://learn.chatgpt.com/docs/agent-configuration/subagents) 说明省略模型与推理设置会继承父代理，也建议按任务选择模型和可支持推理档。本 Skill 的 Luna/xhigh、6.1 Sol/high、Astra/high 与 deep_comparison→max 是本地策略，不宣称官方要求固定采用这些组合。模型能力档不是价格或身份认证；同类任务无需强制混用模型。执行与审计入口见 [派发协议](dispatch-protocol.md)。
+
 ## 官方来源与优先级
 
 [Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents)；[Config basics](https://learn.chatgpt.com/docs/config-file/config-basic)；[Skills](https://learn.chatgpt.com/docs/build-skills)。

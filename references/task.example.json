@@ -33,5 +33,6 @@
     "filesystem_read_only": false,
     "external_writes_disabled": false
   },
-  "parent_model": "gpt-6-astra"
+  "parent_model": "gpt-6.1-sol",
+  "risk_evidence": "纯函数，不写外部状态；局部文件修改可回退"
 }

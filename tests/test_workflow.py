@@ -2,8 +2,9 @@ import json
 from pathlib import Path
 import sys
 import unittest
+from tempfile import TemporaryDirectory
 sys.path.insert(0, str(Path(__file__).parents[1] / 'scripts'))
-from workflow import route, failure_action, audit_mapping, select_family
+from workflow import route, failure_action, audit_mapping, select_family, preflight, audit_dispatches, digest
 ROOT = Path(__file__).parents[1]
 
 class WorkflowTest(unittest.TestCase):
@@ -32,7 +33,39 @@ class WorkflowTest(unittest.TestCase):
 
     def test_multimodule_judgment_standard(self):
         self.task.update(difficulty='L2', assessment_evidence='接口明确，但需要协调两个模块的数据契约')
-        self.assertEqual(route(self.task, self.config)['tier'], 'standard')
+        result = route(self.task, self.config)
+        self.assertEqual(result['tier'], 'standard')
+        self.assertEqual(result['requested'], {'model': 'gpt-6.1-sol', 'reasoning_effort': 'high'})
+
+    def test_61_deep_comparison_keeps_optional_separate_evidence(self):
+        self.task.update(parent_model='gpt-6.1-sol', difficulty='L2', reasoning_need='deep_comparison')
+        without_separate_evidence = route(self.task, self.config)
+        self.task['reasoning_evidence'] = '需要对比日志与请求不一致的多个候选解释'
+        result = route(self.task, self.config)
+        self.assertEqual(result['dispatch']['model'], 'gpt-6.1-sol')
+        self.assertEqual(result['dispatch']['reasoning_effort'], 'max')
+        self.assertEqual(result['requested'], without_separate_evidence['requested'])
+        self.config['catalog']['gpt-6.1-sol'].remove('max')
+        with self.assertRaises(ValueError): route(self.task, self.config)
+
+    def test_56_standard_preserves_terra_medium(self):
+        self.task.update(parent_model='gpt-5.6-sol', difficulty='L2')
+        self.assertEqual(route(self.task, self.config)['requested'],
+                         {'model': 'gpt-5.6-terra', 'reasoning_effort': 'medium'})
+
+    def test_risk_evidence_optional_but_validated_when_present(self):
+        self.task.pop('risk_evidence', None)
+        self.assertIsNotNone(route(self.task, self.config)['dispatch'])
+        for value in ['', '   ', None, []]:
+            self.task['risk_evidence'] = value
+            with self.assertRaises(ValueError): route(self.task, self.config)
+
+    def test_no_forced_model_diversity(self):
+        first = route(self.task, self.config)['dispatch']
+        self.task['id'] = 'NEXT-L1'
+        second = route(self.task, self.config)['dispatch']
+        self.assertEqual(first['model'], second['model'])
+        self.assertEqual(first['reasoning_effort'], second['reasoning_effort'])
 
     def test_unknown_cause_then_reassess(self):
         self.task.update(difficulty='L3', role='Advisor', write_scope=[], assessment_evidence='尚无可复现根因')
@@ -219,7 +252,7 @@ class WorkflowTest(unittest.TestCase):
 
     def test_invalid_workload_and_reasoning_need_rejected(self):
         for field in ['workload', 'reasoning_need']:
-            for value in ['unknown', None, True, [], {}]:
+            for value in ['unknown', 'routine', None, True, [], {}]:
                 with self.subTest(field=field, value=value):
                     task = dict(self.task, **{field: value})
                     with self.assertRaisesRegex(ValueError, 'invalid ' + field):
@@ -374,5 +407,164 @@ class WorkflowTest(unittest.TestCase):
         self.assertIsNone(r['observed_runtime']['model'])
         self.assertIsNone(r['evidence_binding'])
         self.assertEqual(r['review_result'], 'not_run')
+
+    def prepared(self):
+        result = route(self.task, self.config)
+        call = dict(result['dispatch'], message='有界任务契约；真实文本由主 Agent 注入')
+        capabilities = {'source': 'fixture schema', 'parameters': list(call), 'catalog': self.config['catalog']}
+        result['preflight'] = preflight(result, call, capabilities)
+        return result, call, capabilities
+
+    def test_preflight_rejects_inheritance_mismatch_and_extra_params(self):
+        result, call, capabilities = self.prepared()
+        for key in ['model', 'reasoning_effort', 'fork_turns']:
+            bad = dict(call)
+            del bad[key]
+            with self.assertRaises(ValueError): preflight(result, bad, capabilities)
+        for change in [dict(fork_turns='all'), dict(model='gpt-6-astra'), dict(reasoning_effort='low'),
+                       dict(service_tier='fast'), dict(message='')]:
+            with self.assertRaises(ValueError): preflight(result, dict(call, **change), capabilities)
+        capabilities['catalog'] = {}
+        with self.assertRaises(ValueError): preflight(result, call, capabilities)
+        result['dispatch'] = None
+        with self.assertRaises(ValueError): preflight(result, call, capabilities)
+
+    def audit_fixture(self, call_change=None, model=None, effort=None, record_change=None,
+                     extra=False, desktop=False, parent_match=True, changed_artifact=False, contexts=None,
+                     nested=False):
+        result, call, capabilities = self.prepared()
+        with TemporaryDirectory() as directory:
+            base = Path(directory)
+            result['route_evidence'] = {}
+            for key, content in [('task', self.task), ('config', self.config), ('capabilities', capabilities)]:
+                path = base / (key + '.json')
+                path.write_text(json.dumps(content), encoding='utf-8')
+                result['route_evidence'][key] = {'path': str(path), 'sha256': digest(path.read_bytes())}
+            if record_change:
+                record_change(result)
+            if changed_artifact:
+                (base / 'task.json').write_text('{}', encoding='utf-8')
+            actual = dict(call)
+            if call_change:
+                call_change(actual)
+            events = [
+                {'type': 'session_meta', 'payload': {'id': 'parent-1'}},
+                {'timestamp': '2099-01-01T00:00:00Z', 'type': 'response_item', 'payload': {
+                    'type': 'function_call', 'name': 'collaboration.spawn_agent', 'call_id': 'call-1',
+                    'arguments': json.dumps(actual)}},
+                {'type': 'response_item', 'payload': {'type': 'function_call_output', 'call_id': 'call-1',
+                    'output': json.dumps({'task_name': '/root/smoke_1'} if desktop else {'agent_id': 'child-1'})}}]
+            if extra:
+                events.append({'timestamp': '2099-01-01T00:00:00Z', 'type': 'response_item', 'payload': {
+                    'type': 'function_call', 'name': 'collaboration.spawn_agent', 'call_id': 'call-2',
+                    'arguments': json.dumps({'task_name': 'unrouted', 'message': 'bypass'})}})
+            parent = base / 'parent.jsonl'
+            parent.write_text('\n'.join(json.dumps(e) for e in events), encoding='utf-8')
+            children = []
+            if model or effort or contexts:
+                child = base / 'child.jsonl'
+                metadata = {'id': 'child-1'}
+                if desktop:
+                    binding = {'agent_path': '/root/smoke_1',
+                               'parent_thread_id': 'parent-1' if parent_match else 'another-parent'}
+                    if nested:
+                        metadata['source'] = {'subagent': {'thread_spawn': binding}}
+                    else:
+                        metadata.update(binding)
+                child.write_text('\n'.join(json.dumps(e) for e in [
+                    {'type': 'session_meta', 'payload': metadata},
+                    *({'type': 'turn_context', 'payload': context}
+                      for context in (contexts or [{'model': model, 'effort': effort}]))]), encoding='utf-8')
+                children.append(child)
+            return audit_dispatches(parent, [result], children)
+
+    def test_audit_matching_request_runtime_is_not_upstream_proof(self):
+        result = self.audit_fixture(model='gpt-6-luna', effort='xhigh')
+        self.assertEqual(result['protocol_status'], 'passed')
+        self.assertEqual(result['dispatches'][0]['runtime_status'], 'match')
+        self.assertIsNone(result['dispatches'][0]['upstream_identity'])
+
+    def test_audit_unknown_runtime_stays_unknown(self):
+        result = self.audit_fixture()
+        self.assertEqual(result['protocol_status'], 'passed')
+        self.assertEqual(result['dispatches'][0]['runtime_status'], 'unknown')
+
+    def test_audit_detects_unrouted_spawn_even_with_valid_receipt(self):
+        result = self.audit_fixture(extra=True)
+        self.assertEqual(result['protocol_status'], 'failed')
+        codes = {v['code'] for v in result['violations']}
+        self.assertTrue({'missing_route_preflight', 'missing_model', 'missing_reasoning_effort'} <= codes)
+
+    def test_audit_detects_call_and_runtime_mismatch(self):
+        result = self.audit_fixture(call_change=lambda call: call.pop('model'), model='gpt-6-astra', effort='high')
+        codes = {v['code'] for v in result['violations']}
+        self.assertTrue({'dispatch_route_mismatch', 'missing_model', 'runtime_request_mismatch'} <= codes)
+
+    def test_audit_detects_late_preflight_and_changed_message(self):
+        result = self.audit_fixture(call_change=lambda call: call.update(message='changed'),
+            record_change=lambda record: record['preflight'].update(checked_at='2100-01-01T00:00:00+00:00'))
+        codes = {v['code'] for v in result['violations']}
+        self.assertTrue({'dispatch_message_changed_after_preflight', 'preflight_not_before_dispatch'} <= codes)
+
+    def test_audit_detects_missing_artifact_bindings(self):
+        result = self.audit_fixture(record_change=lambda record: record.update(route_evidence={}))
+        self.assertIn('missing_route_artifact_binding', {v['code'] for v in result['violations']})
+
+    def test_desktop_agent_path_and_opaque_message_are_not_fabricated(self):
+        result = self.audit_fixture(desktop=True, model='gpt-6-luna', effort='xhigh',
+                                   call_change=lambda call: call.update(message='gAAAAopaque'))
+        self.assertEqual(result['protocol_status'], 'passed')
+        dispatch = result['dispatches'][0]
+        self.assertEqual(dispatch['agent_id'], 'child-1')
+        self.assertEqual(dispatch['message_status'], 'unverifiable_opaque_log')
+        self.assertEqual(result['unverified'], [{'task_name': 'smoke_1', 'field': 'message_status'}])
+
+    def test_child_from_other_parent_cannot_supply_runtime_proof(self):
+        result = self.audit_fixture(desktop=True, parent_match=False, model='gpt-6-luna', effort='xhigh')
+        self.assertIn('child_parent_binding_unconfirmed', {v['code'] for v in result['violations']})
+
+    def test_nested_desktop_runtime_binding_matches_actual_log_format(self):
+        for parent_match in [True, False]:
+            with self.subTest(parent_match=parent_match):
+                result = self.audit_fixture(desktop=True, nested=True, parent_match=parent_match,
+                                            model='gpt-6-luna', effort='xhigh')
+                if parent_match:
+                    self.assertEqual(result['protocol_status'], 'passed')
+                    self.assertEqual(result['dispatches'][0]['runtime_status'], 'match')
+                    self.assertEqual(result['dispatches'][0]['agent_id'], 'child-1')
+                else:
+                    self.assertIn('child_parent_binding_unconfirmed', {v['code'] for v in result['violations']})
+
+    def test_preflight_uses_final_visual_and_deep_comparison_parameters(self):
+        cases = [('L1', 'visual_interaction', 'normal', 'gpt-6.1-terra'),
+                 ('L2', 'general', 'deep_comparison', 'gpt-6.1-sol')]
+        for difficulty, workload, need, model in cases:
+            with self.subTest(workload=workload, need=need):
+                self.task.update(difficulty=difficulty, workload=workload, reasoning_need=need)
+                result, call, capabilities = self.prepared()
+                self.assertEqual(call['model'], model)
+                self.assertEqual(call['reasoning_effort'], 'max')
+                self.assertEqual(result['preflight']['parameters'], result['dispatch'])
+
+    def test_changed_artifacts_detected(self):
+        result = self.audit_fixture(changed_artifact=True)
+        self.assertIn('route_artifact_changed_or_missing', {v['code'] for v in result['violations']})
+
+    def test_partial_runtime_cannot_claim_match(self):
+        result = self.audit_fixture(model='gpt-6-luna')
+        self.assertEqual(result['dispatches'][0]['runtime_status'], 'unknown')
+
+    def test_later_matching_context_does_not_hide_earlier_mismatch(self):
+        result = self.audit_fixture(contexts=[{'model': 'gpt-6-astra', 'effort': 'high'},
+                                             {'model': 'gpt-6-luna', 'effort': 'xhigh'}])
+        self.assertEqual(result['protocol_status'], 'failed')
+        self.assertEqual(result['dispatches'][0]['runtime_status'], 'mismatch')
+        self.assertEqual(len(result['dispatches'][0]['runtime_records']), 2)
+        self.assertIn('runtime_request_mismatch', {v['code'] for v in result['violations']})
+
+    def test_later_matching_context_does_not_hide_incomplete_context(self):
+        result = self.audit_fixture(contexts=[{'model': 'gpt-6-luna'},
+                                             {'model': 'gpt-6-luna', 'effort': 'xhigh'}])
+        self.assertEqual(result['dispatches'][0]['runtime_status'], 'unknown')
 
 if __name__ == '__main__': unittest.main()
