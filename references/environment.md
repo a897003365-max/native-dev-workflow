@@ -8,7 +8,7 @@
 
 当前 `collaboration.spawn_agent` 已提供 `gpt-6.1-terra`，支持 low、medium、high、xhigh、max、ultra；6 与 5.6 系列其余目录项亦按当次工具枚举复核。公开 API 的 none 与工具枚举不同，不加入本工具的派发目录。Ultra 的工具可选性与本工作流禁止子代理自动继续委派的策略分开记录。
 
-官方依据：[2026-10-26 Terra 发布](https://learn.chatgpt.com/docs/whats-new/october-26-30-2026)、[模型选型](https://developers.openai.com/api/docs/guides/model-selection)、[GPT-6 使用指导](https://developers.openai.com/api/docs/guides/latest-model)、[Work/Codex 模型与推理](https://learn.chatgpt.com/docs/models)。定位为 Terra 视觉理解和精确电脑操作、Sol 复杂编码与持续工作、Astra 最难的推理和专业工作；Terra 从 medium 开始，根据代表性任务比较结果。
+官方依据：[2026-10-26 Terra 发布](https://learn.chatgpt.com/docs/whats-new/october-26-30-2026)、[模型选型](https://developers.openai.com/api/docs/guides/model-selection)、[GPT-6 使用指导](https://developers.openai.com/api/docs/guides/latest-model)、[Work/Codex 模型与推理](https://learn.chatgpt.com/docs/models)。定位为 Terra 视觉理解和精确电脑操作、Sol 复杂编码与持续工作、Astra 最难的推理和专业工作；官方建议 Terra 从 medium 开始。本技能按用户本次明确要求，将 GPT-6.1 Terra 视觉专长配置改为 max；此前 medium 的单样例对照保留为历史证据，不作为 max 的性能证据。
 
 三档通用路由、Terra 专长、代码行为审查下限与 Sol/max 的具体规则只维护在 SKILL.md 和 routing.json。Luna/xhigh 暂保留，缺少本机同条件证据时不宣称统一降档质量不变。官方定位不是本机性能排名；单次隔离界面对照只能证明该样例的识别和操作表现，耗时与可观测用量需另记，不能外推整体优势。
 

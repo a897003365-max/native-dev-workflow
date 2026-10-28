@@ -101,7 +101,7 @@
     "6": {
       "visual_interaction": {
         "model": "gpt-6.1-terra",
-        "reasoning_effort": "medium"
+        "reasoning_effort": "max"
       }
     }
   },

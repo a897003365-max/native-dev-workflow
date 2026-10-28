@@ -24,12 +24,12 @@ description: 本地开发、修复和代码审查时，按任务语义评估难�
 
 任务输入新增两个可选判断，由主 Agent 根据证据填写，不由脚本匹配关键词：
 
-- `workload` 默认 `general`。`visual_interaction` 用于截图理解、视觉核验及目标明确的局部界面操作；仅在 6 系列、L1/L2、低中风险的 Explorer/Executor 上选择专长配置 `gpt-6.1-terra/medium`。复杂 UI 代码、状态管理、Advisor 和代码 Reviewer 继续走通用路线；L3、审查质量门槛和权限要求优先。`tier` 仍记录通用能力档，最终模型以 `requested`/`dispatch` 为准。5.6 不应用此专长配置，也不跨系列派发。
+- `workload` 默认 `general`。`visual_interaction` 用于截图理解、视觉核验及目标明确的局部界面操作；仅在 6 系列、L1/L2、低中风险的 Explorer/Executor 上选择专长配置 `gpt-6.1-terra/max`。复杂 UI 代码、状态管理、Advisor 和代码 Reviewer 继续走通用路线；L3、审查质量门槛和权限要求优先。`tier` 仍记录通用能力档，最终模型以 `requested`/`dispatch` 为准。5.6 不应用此专长配置，也不跨系列派发。
 - `reasoning_need` 默认 `normal`。多假设、冲突证据及需要深入比较候选解释时填 `deep_comparison`；最终选中 `gpt-6.1-sol` 才由脚本改为 `max`，不选 `xhigh`，其他模型保持自身映射。先核验当前工具支持该模型和 `max`，不支持即拒绝派发；不再手工改写已验证的 `dispatch`。输出 `selection_rules` 记录实际命中的难度、审查门槛、专长、失败升级和推理调整规则。
 
 视觉专长任务遇到能力失败时，脚本返回 `reassess_specialist_failure`、`dispatch=null`。先区分视觉输入、工具条件和推理困难；保留原失败历史和计数，依据证据重评难度并改走 `general` 后重新路由，不得清空历史或反复选回 Terra。环境、权限、工具和外部错误仍按原失败规则处理，同根因两次及总轮数上限优先。
 
-保留 Luna/xhigh 是质量优先的现有策略，尚无本机对照证据支持统一降档；Terra/medium 是依据官方定位的专长起点，不能表述为已验证优于 Sol。模型定位、来源与验证边界见 [来源与环境](references/environment.md)。`ultra` 会自动继续委派，虽然工具目录可能列出它，本工作流的子代理路由拒绝选择该档。
+保留 Luna/xhigh 是质量优先的现有策略，尚无本机对照证据支持统一降档；Terra/max 是用户明确选定的视觉专长配置，不能表述为已验证优于 Sol，此前 medium 的单样例对照也不证明 max 的质量或耗时。模型定位、来源与验证边界见 [来源与环境](references/environment.md)。`ultra` 会自动继续委派，虽然工具目录可能列出它，本工作流的子代理路由拒绝选择该档。
 
 需要委派时复制 [任务记录输入](references/task.example.json)，写入本任务已有证据目录（无入口可用临时目录），填写语义评估证据及 `parent_model`（主任务实际运行模型，不是 config.toml 默认值）；使用对应平台文档中“运行路由与验证”的命令执行。任务文件必须传真实绝对路径，不直接运行未替换的示例路径。
 

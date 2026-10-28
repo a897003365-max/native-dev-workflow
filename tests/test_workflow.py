@@ -235,7 +235,7 @@ class WorkflowTest(unittest.TestCase):
                                          write_scope=[] if role == 'Explorer' else ['slug.py'])
                         r = route(self.task, self.config)
                         self.assertEqual(r['family'], '6')
-                        self.assertEqual(r['requested'], {'model': 'gpt-6.1-terra', 'reasoning_effort': 'medium'})
+                        self.assertEqual(r['requested'], {'model': 'gpt-6.1-terra', 'reasoning_effort': 'max'})
                         self.assertEqual(r['dispatch']['model'], r['requested']['model'])
                         self.assertIn('specialist:visual_interaction', r['selection_rules'])
                         self.assertEqual(r['speed_preference']['requested'], 'inherit_parent')
@@ -284,7 +284,7 @@ class WorkflowTest(unittest.TestCase):
     def test_deep_comparison_does_not_invent_other_model_efforts(self):
         cases = [('gpt-6-astra', 'L1', 'general', 'gpt-6-luna', 'xhigh'),
                  ('gpt-6-astra', 'L3', 'general', 'gpt-6-astra', 'high'),
-                 ('gpt-6-astra', 'L2', 'visual_interaction', 'gpt-6.1-terra', 'medium'),
+                 ('gpt-6-astra', 'L2', 'visual_interaction', 'gpt-6.1-terra', 'max'),
                  ('gpt-5.6-sol', 'L2', 'general', 'gpt-5.6-terra', 'medium'),
                  ('gpt-5.6-sol', 'L3', 'general', 'gpt-5.6-sol', 'high')]
         for parent, difficulty, workload, model, effort in cases:
