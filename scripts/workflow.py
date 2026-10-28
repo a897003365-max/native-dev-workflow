@@ -79,6 +79,12 @@ def route(task, config, role_config=None):
     for key in ['tiny', 'behavior_change']:
         if type(task[key]) is not bool:
             raise ValueError(key + ' must be boolean')
+    workload = task.get('workload', 'general')
+    reasoning_need = task.get('reasoning_need', 'normal')
+    if not isinstance(workload, str) or workload not in {'general', 'visual_interaction'}:
+        raise ValueError('invalid workload')
+    if not isinstance(reasoning_need, str) or reasoning_need not in {'normal', 'deep_comparison'}:
+        raise ValueError('invalid reasoning_need')
     if task['role'] != 'Executor' and task['write_scope']:
         raise ValueError('read-only role must have empty write_scope')
     v = task['verification']
@@ -96,14 +102,41 @@ def route(task, config, role_config=None):
         missing = sorted(set(missing) | ({'isolated_test_environment'} - set(v['available'])))
     action = failure_action(task.get('failures', []), config['max_fix_rounds'])
     tier = {'L1': 'economy', 'L2': 'standard', 'L3': 'strong'}[task['difficulty']]
+    selection_rules = ['difficulty:' + task['difficulty'] + ':' + tier]
+    if (family == '6' and task['role'] == 'Reviewer' and task['behavior_change']
+            and tier == 'economy'):
+        tier = 'standard'
+        selection_rules.append('code_review_floor:standard')
     if task['role'] == 'Reviewer' and task['risk'] == 'high':
         tier = 'strong'
+        selection_rules.append('high_risk_review:strong')
+    visual_eligible = (family == '6' and workload == 'visual_interaction'
+                       and task['role'] in {'Explorer', 'Executor'}
+                       and task['difficulty'] in {'L1', 'L2'}
+                       and task['risk'] in {'low', 'medium'})
+    if visual_eligible and action == 'escalate_with_evidence':
+        action = 'reassess_specialist_failure'
+        selection_rules.append('specialist_capability_failure:reassess')
     if action == 'escalate_with_evidence':
         tier = {'economy': 'standard', 'standard': 'strong', 'strong': 'strong'}[tier]
+        selection_rules.append('capability_escalation:' + tier)
     requested = dict(config['tiers'][tier])
+    if visual_eligible and action == 'proceed':
+        specialist = config.get('specialists', {}).get(family, {}).get(workload)
+        if specialist is None:
+            raise ValueError('visual specialist must be configured before dispatch')
+        requested = dict(specialist)
+        selection_rules.append('specialist:' + workload)
+    if reasoning_need == 'deep_comparison' and requested['model'] == 'gpt-6.1-sol':
+        requested['reasoning_effort'] = 'max'
+        selection_rules.append('deep_comparison:max')
+    if config['parent_models'].get(requested['model']) != family:
+        raise ValueError('child model must stay in parent model family')
     catalog = config['catalog']
     if requested['model'] not in catalog or requested['reasoning_effort'] not in catalog[requested['model']]:
         raise ValueError('requested model/effort not in verified catalog')
+    if requested['reasoning_effort'] == 'ultra':
+        raise ValueError('ultra delegates additional agents; select a single-agent reasoning effort')
     warnings = audit_mapping(config, role_config, requested)
     blocked = missing or any(w.startswith('role_overrides_') for w in warnings)
     direct = (task['role'] == 'Executor' and task['tiny']
@@ -128,6 +161,7 @@ def route(task, config, role_config=None):
     can_dispatch = not direct and not blocked and action in {'proceed', 'escalate_with_evidence'}
     return {
         'task': task, 'family': family, 'tier': tier, 'selection_reason': task['assessment_evidence'],
+        'selection_rules': selection_rules,
         'action': 'blocked_verification_or_config' if blocked else ('main_agent_direct' if direct and action == 'proceed' else action),
         'requested': requested, 'speed_preference': config['speed_preferences'].get(requested['model'], config['speed_preferences']['default']),
         'missing_verification': missing, 'warnings': warnings,

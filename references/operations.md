@@ -9,7 +9,9 @@
 
 Skill 校验器需要 PyYAML，而路由运行不需要。平台文档中的 `uv run --no-project --with pyyaml` 为校验器提供隔离依赖，不修改全局 Python。保留各平台 Python 入口中的 `-X utf8`；不要修改系统区域或全局编码配置。
 
-可配置 routing.json 中 families 下每系列的三个能力档和 max_fix_rounds。任务输入必须填主任务实际 `parent_model`，未知模型会拒绝派发；主任务切换系列后重新路由，升级保持同系列。修改映射必须先在当前工具/catalog 验证名称和推理支持，保留来源及运行证据。aliases 仅填已核验网关映射，不凭名称猜。无网关证据保持空映射、真实上游未知。
+可配置 routing.json 中 families 下每系列的三个能力档、specialists 下的视觉专长设置和 max_fix_rounds。任务输入必须填主任务实际 `parent_model`，未知模型会拒绝派发；主任务切换系列后重新路由，升级保持同系列。修改映射必须先在当前工具/catalog 验证名称和推理支持，保留来源及运行证据。aliases 仅填已核验网关映射，不凭名称猜。无网关证据保持空映射、真实上游未知。
+
+可选输入 `workload=general|visual_interaction`、`reasoning_need=normal|deep_comparison` 的默认值、适用范围及优先级以 [Skill 的评估与路由](../SKILL.md#评估与路由) 为准。`selection_rules` 解释实际选择过程，`tier` 为通用能力档，`requested` 与非空的 `dispatch` 给出最终模型和推理。新字段省略时保持通用路径，但 6 系列代码行为审查现在至少选标准档。5.6 不应用新专长或 Sol 6.1 深度比较规则。视觉专长能力失败时先根据返回动作重评，保留同一份失败历史，再填写 general 并重新路由；不得手工修改 dispatch 绕过门禁。
 
 Reviewer 任务可填写 `review_mode`，省略时为 `code`。其他选择为 `isolated_test` 或 `strict`，定义与权限门禁以 [Skill 的职责与权限规则](../SKILL.md#职责权限和上下文) 为准。分别记录代码审查结论、路由输出的 `review_isolation` 与尚缺的测试/发布条件；主 Agent 最终状态仍用通过、失败、部分完成或阻塞，不把某项审查通过扩展为全部条件满足。
 

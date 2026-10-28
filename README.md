@@ -31,9 +31,13 @@
 | 主模型系列 | 经济档 | 标准档 | 强能力档 |
 | --- | --- | --- | --- |
 | 5.6 | Luna / xhigh | Terra / medium | Sol / high |
-| 6（含 gpt-6.1-sol 主模型） | gpt-6-luna / xhigh | gpt-6.1-sol / high | gpt-6-astra / high |
+| 6（含 gpt-6.1-sol、gpt-6.1-terra 主模型） | gpt-6-luna / xhigh | gpt-6.1-sol / high | gpt-6-astra / high |
 
-6 系列的标准档及升级到标准档的派发均使用 `gpt-6.1-sol`；原 `gpt-6-sol` 仍可作为主模型输入。`gpt-6.1-sol` 的多假设、冲突证据任务可由主 Agent 依据 Skill 选择 `max` 并记录实际派发，路由脚本默认输出 `high`。
+6 系列的标准档及升级到标准档的派发均使用 `gpt-6.1-sol`；原 `gpt-6-sol` 仍可作为主模型输入。代码行为审查的 Reviewer 在 6 系列至少使用 Sol/high，高风险 Reviewer 使用 Astra/high。Luna/xhigh 保留现有质量策略；5.6 保持原映射。
+
+任务可选 `workload` 和 `reasoning_need`，省略时分别为 `general` 和 `normal`。`visual_interaction` 为 6 系列、L1/L2、低中风险的 Explorer/Executor 选择 Terra/medium；L3、代码审查和复杂 UI 逻辑走通用路线。`deep_comparison` 使最终选中的 Sol 使用 max，其他模型保持各自设置。路由输出 `selection_rules`，最终派发与验证后的 `dispatch` 一致，不再手工覆盖推理档。
+
+视觉专长能力失败返回 `reassess_specialist_failure`，暂停派发并保留失败历史；按证据重评后改走 general，不能以视觉偏好反复派发同一配置。环境与权限阻塞不靠换模型解除。工具目录支持不代表本工作流允许自动使用 Ultra；子代理路由拒绝该档。完整条件以 Skill 为准。
 
 映射位于 `routing.json`，不是 Codex 原生配置文件。速度默认跟随主模型，只有 `gpt-6-luna` 默认请求 Fast；当前原生工具不支持逐子代理速度参数，记录为未应用/未知，不能据此声称已验证继承或已开启加速。只读角色也不代表强制权限隔离。
 

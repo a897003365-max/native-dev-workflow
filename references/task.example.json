@@ -9,6 +9,8 @@
   ],
   "difficulty": "L1",
   "risk": "low",
+  "workload": "general",
+  "reasoning_need": "normal",
   "assessment_evidence": "目标与实现路径明确；纯函数，无外部状态；为验证委派链路执行一次有界冒烟",
   "tools": [
     "read",
